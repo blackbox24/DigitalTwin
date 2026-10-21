@@ -9,10 +9,12 @@ from utils.llm import get_llm_response
 
 # Page configuration
 st.set_page_config(
-    page_title="Digital Twin Assistant",
+    page_title="Digital Twin AI Assistant",
     page_icon="🤖",
-    layout="centered"
+    layout="centered",
+    initial_sidebar_state="expanded"
 )
+
 
 # Method 1: Streamlit secrets (recommended for deployment)
 def get_api_key():
@@ -37,31 +39,54 @@ def get_api_key():
 
 # Method 2: Environment variables (for local development)
 
-# def main():
-#     st.title("🤖 Digital Twin Assistant")
-#     st.write("An AI-powered personal assistant built for fast and reliable deployment.")
+def main():
+    st.title("🤖 Digital Twin Assistant")
+    st.write("An AI-powered personal assistant built for fast and reliable deployment.")
 
-#     # Secure API key retrieval
-#     api_key = get_api_key()
+    # Secure API key retrieval
+    api_key = get_api_key()
 
-#     # Chat interface input
-#     user_input = st.text_input("Ask your digital twin anything:")
-    
+    # Initialize cached client
+    try:
+        client = init_anthropic_client(api_key)
+    except Exception as e:
+        st.error(f"Failed to initialize client: {e}")
+        st.stop()
 
-#     if user_input:
-#         with st.spinner("Thinking..."):
-#             try:
-#                 client = anthropic.Anthropic(api_key=api_key)
-#                 message = client.messages.create(
-#                     model="claude-3-5-sonnet-20241022",
-#                     max_tokens=1024,
-#                     messages=[{"role": "user", "content": user_input}]
-#                 )
-#                 response_text = message.content[0].text
-#                 st.success("Response:")
-#                 st.write(response_text)
-#             except Exception as e:
-#                 st.error(f"An error occurred while connecting to the API: {e}")
+    # Session State management for chat history
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    # Display prior conversation history efficiently
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # Requirement 3: Robust Error Handling & User Feedback
+    if user_prompt := st.chat_input("Ask me anything about my background or projects..."):
+        # Append and display user message
+        st.session_state.messages.append({"role": "user", "content": user_prompt})
+        with st.chat_message("user"):
+            st.markdown(user_prompt)
+            # Generate assistant response with loading indicator
+            with st.chat_message("assistant"):
+                with st.spinner("Thinking..."):
+                    try:
+                        response = client.messages.create(
+                            model="claude-3-5-sonnet-20241022",
+                            max_tokens=1024,
+                            messages=[
+                                {"role": m["role"], "content": m["content"]}
+                                for m in st.session_state.messages
+                            ]
+                        )
+                        assistant_response = response.content[0].text
+                        st.markdown(assistant_response)
+                        st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+                    except anthropic.APIError as e:
+                        st.error(f"API Error encountered: {e.message}")
+                    except Exception as e:
+                        st.error(f"An unexpected error occurred: {e}")
 
 # Requirement 1: Use @st.cache_data for expensive data loading operations
 @st.cache_data(show_spinner=False)
@@ -77,6 +102,11 @@ def load_large_dataset():
         "Stock": [50 - (i % 20) for i in range(1, 101)]
     }
     return pd.DataFrame(data)
+
+@st.cache_resource(show_spinner=False)
+def init_anthropic_client(api_key: str):
+    """Initialize and cache the Anthropic API client to prevent redundant instantiations."""
+    return anthropic.Anthropic(api_key=api_key)
 
 # Requirement 2 & 4: Implement Pagination for large datasets
 def paginate_dataframe(df: pd.DataFrame, page_size: int = 10):
@@ -100,34 +130,34 @@ def paginate_dataframe(df: pd.DataFrame, page_size: int = 10):
     st.sidebar.text(f"Showing rows {start_idx + 1} to {min(end_idx, total_rows)} of {total_rows}")
     return df.iloc[start_idx:end_idx]
 
-def main():
-    st.title("⚡ Optimized Data Explorer & Analytics")
-    st.write("This application demonstrates caching, loading indicators, and pagination for high performance.")
+# def main():
+#     st.title("⚡ Optimized Data Explorer & Analytics")
+#     st.write("This application demonstrates caching, loading indicators, and pagination for high performance.")
 
-    # Requirement 3: Add loading indicators during expensive actions
-    with st.spinner("🔄 Loading dataset into memory... (Cached after first load)"):
-        df = load_large_dataset()
+#     # Requirement 3: Add loading indicators during expensive actions
+#     with st.spinner("🔄 Loading dataset into memory... (Cached after first load)"):
+#         df = load_large_dataset()
 
-    # Sidebar Filter Options
-    st.sidebar.markdown("### 🔍 Filters")
-    selected_category = st.sidebar.selectbox(
-        "Filter by Category", 
-        ["All"] + list(df["Category"].unique())
-    )
+#     # Sidebar Filter Options
+#     st.sidebar.markdown("### 🔍 Filters")
+#     selected_category = st.sidebar.selectbox(
+#         "Filter by Category", 
+#         ["All"] + list(df["Category"].unique())
+#     )
 
-    # Filter data based on user input
-    filtered_df = df if selected_category == "All" else df[df["Category"] == selected_category]
+#     # Filter data based on user input
+#     filtered_df = df if selected_category == "All" else df[df["Category"] == selected_category]
 
-    # Apply Pagination
-    paginated_data = paginate_dataframe(filtered_df, page_size=10)
+#     # Apply Pagination
+#     paginated_data = paginate_dataframe(filtered_df, page_size=10)
 
-    # Display Metrics & Results
-    col1, col2 = st.columns(2)
-    col1.metric(label="Total Matching Records", value=len(filtered_df))
-    col2.metric(label="Average Price", value=f"${filtered_df['Price'].mean():.2f}")
+#     # Display Metrics & Results
+#     col1, col2 = st.columns(2)
+#     col1.metric(label="Total Matching Records", value=len(filtered_df))
+#     col2.metric(label="Average Price", value=f"${filtered_df['Price'].mean():.2f}")
 
-    st.markdown("### 📊 Dataset View")
-    st.dataframe(paginated_data, use_container_width=True)
+#     st.markdown("### 📊 Dataset View")
+#     st.dataframe(paginated_data, use_container_width=True)
 
 if __name__ == "__main__":
     main()
