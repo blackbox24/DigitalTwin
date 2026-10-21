@@ -22,7 +22,7 @@ def get_api_key():
         return api_key
 
 # Method 2: Environment variables (for local development)
-from dotenv import load_dotenv
-load_dotenv()  # Loads from .env file
+# from decouple 
+# load_dotenv()  # Loads from .env file
 
 api_key = os.getenv("ANTHROPIC_API_KEY")
